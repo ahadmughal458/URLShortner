@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>URL Shortener | Portfolio Project</title>
+    <title>URL Shortener | Portfolio</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +12,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
             min-height: 100vh;
             display: flex;
@@ -68,7 +68,6 @@
             color: #e6edf3;
             font-size: 16px;
             outline: none;
-            transition: all 0.3s ease;
             min-width: 200px;
         }
 
@@ -147,7 +146,6 @@
             font-size: 16px;
             word-break: break-all;
             flex: 1;
-            font-weight: 500;
         }
 
         .result-link a:hover {
@@ -164,7 +162,6 @@
             cursor: pointer;
             font-size: 14px;
             transition: all 0.2s ease;
-            font-weight: 500;
         }
 
         .copy-btn:hover {
@@ -291,7 +288,7 @@
     <div class="container">
         <div class="header">
             <h1>🔗 URL Shortener</h1>
-            <p class="subtitle">Shorten URLs with TinyURL or is.gd</p>
+            <p class="subtitle">Shorten URLs with TinyURL + CORS Proxy</p>
         </div>
 
         <div class="input-group">
@@ -310,7 +307,7 @@
                 Original: <span id="originalUrl"></span>
             </div>
             <div style="margin-top: 10px; font-size: 12px; color: #484f58;">
-                Method: <span class="method-badge" id="methodUsed">TinyURL</span>
+                Method: <span class="method-badge" id="methodUsed">TinyURL + Proxy</span>
             </div>
         </div>
 
@@ -381,40 +378,32 @@
             }
 
             // ============================================
-            // REAL SHORTENING METHODS
+            // SHORTEN WITH CORS PROXY
             // ============================================
 
-            // Method 1: TinyURL API
-            async function shortenWithTinyURL(url) {
+            async function shortenWithProxy(url) {
+                // Using a free CORS proxy service
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const targetUrl = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`;
+                
+                const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+                
+                if (!response.ok) throw new Error('Proxy request failed');
+                const result = await response.text();
+                
+                if (!result || result.includes('Error')) throw new Error('TinyURL returned error');
+                return { short: result.trim(), method: 'TinyURL (via proxy)' };
+            }
+
+            // Fallback: Try without proxy (might work in some environments)
+            async function shortenDirect(url) {
                 const response = await fetch(
                     `https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`
                 );
-                if (!response.ok) throw new Error('TinyURL API error');
+                if (!response.ok) throw new Error('Direct request failed');
                 const result = await response.text();
-                if (!result || result.includes('Error')) throw new Error('TinyURL returned error');
-                return { short: result.trim(), method: 'TinyURL' };
-            }
-
-            // Method 2: is.gd API
-            async function shortenWithIsGd(url) {
-                const response = await fetch(
-                    `https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`
-                );
-                if (!response.ok) throw new Error('is.gd API error');
-                const result = await response.text();
-                if (!result || result.toLowerCase().includes('error')) throw new Error('is.gd returned error');
-                return { short: result.trim(), method: 'is.gd' };
-            }
-
-            // Method 3: v.gd API
-            async function shortenWithVGd(url) {
-                const response = await fetch(
-                    `https://v.gd/create.php?format=simple&url=${encodeURIComponent(url)}`
-                );
-                if (!response.ok) throw new Error('v.gd API error');
-                const result = await response.text();
-                if (!result || result.toLowerCase().includes('error')) throw new Error('v.gd returned error');
-                return { short: result.trim(), method: 'v.gd' };
+                if (!result || result.includes('Error')) throw new Error('TinyURL error');
+                return { short: result.trim(), method: 'TinyURL (direct)' };
             }
 
             // Main shorten function
@@ -443,34 +432,25 @@
                 try {
                     let result = null;
 
-                    // Try TinyURL first
+                    // Try with proxy first (most reliable on GitHub Pages)
                     try {
-                        result = await shortenWithTinyURL(longUrl);
+                        result = await shortenWithProxy(longUrl);
                     } catch (e) {
-                        console.log('TinyURL failed, trying is.gd...');
+                        console.log('Proxy method failed, trying direct...');
                     }
 
-                    // Try is.gd if TinyURL failed
+                    // Try direct if proxy failed
                     if (!result) {
                         try {
-                            result = await shortenWithIsGd(longUrl);
+                            result = await shortenDirect(longUrl);
                         } catch (e) {
-                            console.log('is.gd failed, trying v.gd...');
+                            console.log('Direct method also failed');
                         }
                     }
 
-                    // Try v.gd if both failed
+                    // If all methods failed
                     if (!result) {
-                        try {
-                            result = await shortenWithVGd(longUrl);
-                        } catch (e) {
-                            console.log('v.gd failed too');
-                        }
-                    }
-
-                    // If ALL APIs failed
-                    if (!result) {
-                        showError('All shortening services are currently unavailable. Please try again later.');
+                        showError('Unable to shorten. Please try again later.');
                         shortenBtn.disabled = false;
                         shortenBtn.innerHTML = '🚀 Shorten';
                         return;
@@ -548,8 +528,7 @@
             loadStats();
             urlInput.focus();
 
-            console.log('✅ URL Shortener ready!');
-            console.log('📊 Total links:', stats.total || 0);
+            console.log('✅ URL Shortener ready with CORS proxy!');
         })();
     </script>
 </body>
